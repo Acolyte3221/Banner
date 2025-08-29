@@ -12,26 +12,21 @@ $localBannerPath = "P:\NIWC-A\Enable Secret Banner\Banner.cmd"
 # Note: Ensure the variables $config and $vm are defined before this line
 foreach ($vm in $Config.VMs.PSObject.Properties.GetEnumerator().Name){
     $fqdn = "$($config.VMs.$vm.hostname).$($config.top.Domain)"
-    $RemoteBannerFolder = "C:\temp"
-    $RemoteBannerPath = "C:\Temp\$($config.VMs.$vm.hostname).cmd"
+    $RemoteBannerFolder = "C:\temp\SecretBanner\"
+    $RemoteBannerPath = "C:\Temp\SecretBanner\Secret Banner for $($vm).cmd"
     try{
         $session = New-PSSession -ComputerName $fqdn -Credential $credentials -ErrorAction SilentlyContinue
-           Invoke-Command -Session $session -ScriptBlock {
-   
-        param($ExecutablePath)
-        New-Item -ItemType Directory -Path $RemotebannerFolder -Force | Out-Null
-        Copy-Item -Path $LocalBannerPath -Destination $RemoteBannerPath -ToSession $session
+        Invoke-Command -Session $session -ScriptBlock {   
+        param($LocalBannerPath, $RemoteBannerPath, $RemoteBannerFolder, $session)
+        New-Item -ItemType Directory -Path $RemotebannerFolder -Force 
+    }-ArgumentList $RemoteBannerPath, $LocalBannerPath, $RemoteBannerFolder
 
+   Copy-Item -Path $LocalBannerPath -Destination $RemoteBannerPath -ToSession $session
 
-    & $ExecutablePath
-    }
+        Invoke-Command -Session $session -ScriptBlock {   
+        param($LocalBannerPath, $RemoteBannerPath, $RemoteBannerFolder, $session)
+        Start-Process -FilePath "C:\Temp\*.cmd" 
+    }-ArgumentList $RemoteBannerPath
 
-   
-
-
- 
-
-} -ArgumentList $RemoteBannerPath # Pass the remote path as an argument
-}
-# Don't forget to clean up the session when you're done
-Remove-PSSession -Session $session
+    }Catch{}
+ } & $localBannerPath
