@@ -2,7 +2,7 @@
 $JsonFile = "D:\vmconfig\VMConfig.json"
 $Config = Get-Content -Path $JsonFile | ConvertFrom-Json
 $password = "Nope" | ConvertTo-SecureString -AsPlainText -Force
-$credentails = New-Object System.Management.Automation.PSCredential -ArgumentList "username", $password
+$credentials = New-Object System.Management.Automation.PSCredential -ArgumentList "username", $password
 $localBannerPath = "P:\NIWC-A\Enable Secret Banner\Banner.cmd"
 
 # Create the Temp directory on the remote machine (fixed the typo)
