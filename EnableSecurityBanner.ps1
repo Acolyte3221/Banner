@@ -1,32 +1,55 @@
-# Establish the remote session (your original code was correct here)
-$JsonFile = "D:\vmconfig\VMConfig.json"
-$Config = Get-Content -Path $JsonFile | ConvertFrom-Json
-$password = "Nope" | ConvertTo-SecureString -AsPlainText -Force
-$credentials = New-Object System.Management.Automation.PSCredential -ArgumentList "username", $password
-$localBannerPath = "P:\NIWC-A\Enable Secret Banner\Banner.cmd"
+# --- Quiet mode (no popups / no output) ---
+$ErrorActionPreference      = 'SilentlyContinue'
+$VerbosePreference          = 'SilentlyContinue'
+$InformationPreference      = 'SilentlyContinue'
+$WarningPreference          = 'SilentlyContinue'
+$ProgressPreference         = 'SilentlyContinue'
 
-# Create the Temp directory on the remote machine (fixed the typo)
+# --- Inputs / config ---
+$JsonFile         = "D:\vmconfig\VMConfig.json"
+$Config           = Get-Content -Path $JsonFile | ConvertFrom-Json
 
-# Define local and remote paths
+# Non-interactive credentials (no popup)
+$password         = "Nope" | ConvertTo-SecureString -AsPlainText -Force
+$credentials      = New-Object System.Management.Automation.PSCredential -ArgumentList "username", $password
 
-# Note: Ensure the variables $config and $vm are defined before this line
-foreach ($vm in $Config.VMs.PSObject.Properties.GetEnumerator().Name){
-    $fqdn = "$($config.VMs.$vm.hostname).$($config.top.Domain)"
-    $RemoteBannerFolder = "C:\temp\SecretBanner\"
-    $RemoteBannerPath = "C:\Temp\SecretBanner\Secret Banner for $($vm).cmd"
-    try{
-        $session = New-PSSession -ComputerName $fqdn -Credential $credentials -ErrorAction SilentlyContinue
-        Invoke-Command -Session $session -ScriptBlock {   
-        param($LocalBannerPath, $RemoteBannerPath, $RemoteBannerFolder, $session)
-        New-Item -ItemType Directory -Path $RemotebannerFolder -Force 
-    }-ArgumentList $RemoteBannerPath, $LocalBannerPath, $RemoteBannerFolder
+$LocalBannerPath  = "P:\NIWC-A\Enable Secret Banner\Banner.cmd"
+$RemoteFolder     = "C:\Temp\SecretBanner"
+# The remote file will include the VM name to make it unique
+# Note: We'll compute the exact remote file path per-VM inside the loop.
 
-   Copy-Item -Path $LocalBannerPath -Destination $RemoteBannerPath -ToSession $session
+# --- Process each VM quietly ---
+foreach ($vm in $Config.VMs.PSObject.Properties.Name) {
+    try {
+        # Build FQDN consistently from config
+        $fqdn = "{0}.{1}" -f $Config.VMs.$vm.hostname, $Config.Top.Domain
+        $RemoteFile = Join-Path $RemoteFolder ("Secret Banner for {0}.cmd" -f $vm)
 
-        Invoke-Command -Session $session -ScriptBlock {   
-        param($LocalBannerPath, $RemoteBannerPath, $RemoteBannerFolder, $session)
-        Start-Process -FilePath "C:\Temp\*.cmd" 
-    }-ArgumentList $RemoteBannerPath
+        # Open session (no prompt) and create remote folder
+        $session = New-PSSession -ComputerName $fqdn -Credential $credentials
+        if (-not $session) { continue }
 
-    }Catch{}
- } & $localBannerPath
+        Invoke-Command -Session $session -ScriptBlock {
+            param($Folder)
+            New-Item -ItemType Directory -Path $Folder -Force | Out-Null
+        } -ArgumentList $RemoteFolder | Out-Null
+
+        # Copy banner to remote with unique name
+        Copy-Item -Path $LocalBannerPath -Destination $RemoteFile -ToSession $session | Out-Null
+
+        # Execute the banner on the remote machine
+        Invoke-Command -Session $session -ScriptBlock {
+            param($FilePath)
+            # Start then wait to finish; fully silent
+            Start-Process -FilePath $FilePath -WindowStyle Hidden -Wait
+        } -ArgumentList $RemoteFile | Out-Null
+    }
+    catch {
+        # Silent by design
+    }
+    finally {
+        if ($session) { Remove-PSSession -Session $session }
+    }
+}
+
+# Do NOT run the local banner (removed: & $LocalBannerPath)
