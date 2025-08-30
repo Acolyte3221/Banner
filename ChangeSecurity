@@ -1,0 +1,4 @@
+$JsonFile = "D:\vmconfig\VMConfig.json"
+$config = Get-content -Path $JsonFile | convertFrom-Json 
+$password = "Nope" | convertTo-SecureString -AsPlainText -Force
+$credentials = New-Object System.Management 
